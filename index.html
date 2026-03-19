@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escape Room: El claustro olvidado</title>
+    <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Orbitron:wght@700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --color-principal: #ffffff;
+            --color-sombra: rgba(0, 0, 0, 0.9);
+            --color-acierto: #d4af37; 
+            --color-error: #ff0000;
+        }
+
+        body, html {
+            margin: 0; padding: 0;
+            height: 100%; width: 100%;
+            font-family: 'Special Elite', cursive;
+            background-color: #000;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        /* --- PANTALLA DE INSTRUCCIONES --- */
+        #pantalla-instrucciones {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 3000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .contenedor-instrucciones {
+            max-width: 600px;
+            border: 1px solid #d4af37;
+            padding: 40px;
+            background: #111;
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.2);
+        }
+
+        /* --- NAVEGADOR / MAPA --- */
+        #menu-mapa {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-size: cover;
+            background-position: center;
+            background-image: url('entrada.png'); /* <-- LINK AQUÍ */
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: #111;
+        }
+
+        .grid-mapa {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            max-width: 800px;
+            padding: 20px;
+        }
+
+        .btn-sala {
+            background: rgba(0,0,0,0.8);
+            border: 1px solid #d4af37;
+            color: #d4af37;
+            padding: 20px;
+            cursor: pointer;
+            font-family: 'Special Elite', cursive;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .btn-sala:hover:not(.completada) {
+            background: #d4af37;
+            color: #000;
+        }
+
+        .btn-sala.completada {
+            border-color: #444;
+            color: #444;
+            cursor: default;
+            text-decoration: line-through;
+        }
+
+        /* --- BOTÓN VOLVER --- */
+        .btn-volver {
+            margin-top: 15px;
+            background: transparent;
+            color: #666;
+            border: 1px solid #333;
+            padding: 5px 15px;
+            cursor: pointer;
+            font-family: 'Special Elite', cursive;
+            font-size: 0.8rem;
+        }
+
+        /* --- MONITOR DE CONSTANTES VITALES --- */
+        #monitor-vital {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 15px;
+            border-left: 4px solid #00ff00;
+            font-family: 'Orbitron', sans-serif;
+            transition: all 0.5s;
+        }
+
+        #estado-texto {
+            font-size: 0.7rem;
+            letter-spacing: 2px;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .pulso {
+            width: 100px;
+            height: 2px;
+            background: #00ff00;
+            position: relative;
+            box-shadow: 0 0 10px #00ff00;
+            animation: latido 1.5s infinite;
+        }
+
+        @keyframes latido {
+            0% { opacity: 0.3; transform: scaleX(0.8); }
+            50% { opacity: 1; transform: scaleX(1); }
+            100% { opacity: 0.3; transform: scaleX(0.8); }
+        }
+
+        /* --- OVERLAY DE DAÑO ESTILO CALL OF DUTY --- */
+        #damage-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 50;
+            transition: all 0.8s ease-in-out;
+            box-shadow: inset 0 0 0px rgba(255, 0, 0, 0);
+            opacity: 0;
+            backdrop-filter: blur(0px);
+        }
+
+        .vignette {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 10%, rgba(0,0,0,0.9) 100%);
+            z-index: 15;
+            pointer-events: none;
+        }
+
+        .hit-shake {
+            animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both, flash-sangre 0.5s ease-out;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, -2px, 0); }
+            20%, 80% { transform: translate3d(4px, 4px, 0); }
+            30%, 50%, 70% { transform: translate3d(-6px, -6px, 0); }
+            40%, 60% { transform: translate3d(6px, 6px, 0); }
+        }
+
+        @keyframes flash-sangre {
+            0% { background: rgba(255, 0, 0, 0); }
+            30% { background: rgba(200, 0, 0, 0.4); }
+            100% { background: rgba(255, 0, 0, 0); }
+        }
+
+        @keyframes parpadeo {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+
+        /* --- INTERFAZ --- */
+        #contenedor-timer {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: rgba(0,0,0,0.6);
+            padding: 10px;
+            border: 1px solid #333;
+        }
+
+        #reloj-arena {
+            width: 30px; height: 50px;
+            position: relative;
+            margin-bottom: 10px;
+            border: 2px solid var(--color-acierto);
+            clip-path: polygon(0% 0%, 100% 0%, 50% 50%, 100% 100%, 0% 100%, 50% 50%);
+        }
+
+        #arena-caida {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--color-acierto);
+            transform-origin: bottom;
+        }
+
+        #escenario {
+            height: 100vh; width: 100vw;
+            background-size: cover;
+            background-position: center;
+            display: none; /* Se activa al elegir sala */
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 5;
+            transition: background-image 1.5s ease-in-out, filter 0.8s ease;
+        }
+
+        .panel-pista {
+            background: var(--color-sombra);
+            padding: 3.5rem 2.5rem;
+            border-radius: 5px;
+            text-align: center;
+            max-width: 900px;
+            width: 90%;
+            z-index: 20;
+            border: 1px solid rgba(255,255,255,0.05);
+            box-sizing: border-box;
+        }
+
+        #pista-texto {
+            font-size: 1.65rem;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            color: #ddd;
+        }
+
+        .img-pista {
+            max-width: 150px;
+            max-height: 100px;
+            margin: 10px auto 20px auto;
+            display: block;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 3px;
+            opacity: 0.8;
+        }
+
+        #sala-nombre {
+            letter-spacing: 8px; 
+            opacity: 0.6; 
+            text-transform: uppercase; 
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+        }
+
+        .input-clave {
+            background: rgba(255,255,255,0.03);
+            border: none;
+            border-bottom: 1px solid #444;
+            color: #fff;
+            font-family: 'Special Elite', cursive;
+            font-size: 2.7rem;
+            text-align: center;
+            width: 95%;
+            outline: none;
+            padding: 10px;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+        }
+
+        .btn-confirmar {
+            margin-top: 35px;
+            background: transparent;
+            color: #aaa;
+            border: 1px solid #444;
+            padding: 15px 45px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'Special Elite', cursive;
+            font-size: 1.2rem;
+        }
+
+        @media (max-width: 768px) {
+            #sala-nombre { font-size: 1.2rem; }
+            #pista-texto { font-size: 1.2rem; line-height: 1.4; }
+            .input-clave { font-size: 1.8rem; letter-spacing: 2px; }
+            .panel-pista { padding: 2rem 1rem; width: 95%; }
+            .grid-mapa { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        .btn-confirmar:hover { color: #fff; border-color: #fff; }
+
+        #derrota-final, #victoria-final, #pantalla-numero { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1000; 
+            flex-direction: column; justify-content: center; align-items: center; 
+        }
+        #derrota-final { background: #600; }
+        #victoria-final { background: rgba(0,0,0,0.95); }
+        #pantalla-numero { background: #000; z-index: 1001; }
+        #numero-grande { font-size: 12rem; color: var(--color-acierto); }
+    </style>
+</head>
+<body>
+
+    <div id="pantalla-instrucciones">
+        <div class="contenedor-instrucciones">
+            <h1 style="color: #d4af37; letter-spacing: 3px;">INSTRUCCIONES</h1>
+            <p style="line-height: 1.8; color: #ccc;">
+                Escapa del claustro, resolviendo los acertijos de cada habitación con las pistas proporcionadas, evitando que se acabe el tiempo. Cada resolucion te da un numero clave para la habitacion final. Con cada error irás perdiendo vida, atento a tus signos vitales.
+                <br><br>
+                Puedes apoyarte de cualquier herramienta para resolver los acertijos, la respuesta a cada uno es una sola palabra en singular, sin acentos, sin espacios y solo con letras mayusculas, algunas habitaciones requieren "acciones especiales".
+                <br><br>
+                
+            </p>
+            <button class="btn-confirmar" onclick="comenzarJuego()">COMENZAR</button>
+        </div>
+    </div>
+
+    <div id="damage-overlay"></div>
+    <div class="vignette"></div>
+
+    <div id="monitor-vital">
+        <span id="estado-texto">SALUD OK</span>
+        <div class="pulso" id="linea-pulso"></div>
+    </div>
+
+    <div id="contenedor-timer">
+        <div id="reloj-arena"><div id="arena-caida"></div></div>
+        <div id="tiempo-texto">--:--</div>
+    </div>
+
+    <div id="menu-mapa">
+        <h1 style="letter-spacing: 5px; color: #d4af37;">EL CLAUSTRO OLVIDADO</h1>
+        <p>Selecciona una habitación para entrar...</p>
+        <div class="grid-mapa" id="grid-botones">
+            </div>
+    </div>
+
+    <div id="escenario">
+        <div id="pantalla-numero">
+            <p style="letter-spacing: 10px; color: #444; font-size: 0.8rem;">REVELACIÓN</p>
+            <h1 id="numero-grande">0</h1>
+        </div>
+
+        <div class="panel-pista" id="panel-juego">
+            <h2 id="sala-nombre">...</h2>
+            <div id="pista-texto">...</div>
+            <img id="img-pista" src="" class="img-pista" style="display: none;">
+            
+            <input type="text" id="input-clave" class="input-clave" placeholder="¿Respuesta?" autocomplete="off">
+            <br>
+            <button class="btn-confirmar" id="btn-validar">DESCIFRAR</button>
+            <br>
+            <button class="btn-volver" onclick="volverAlMapa()">VOLVER AL MAPA</button>
+        </div>
+
+        <div id="victoria-final">
+            <h1 style="color: #d4af37;">HAS ESCAPADO DEL CLAUSTRO</h1>
+            <p>¡¡Eres libre de examen!!</p>
+            <button onclick="location.reload()" class="btn-confirmar">VOLVER A EMPEZAR</button>
+        </div>
+
+        <div id="derrota-final">
+            <h1 id="titulo-derrota">SISTEMA COLAPSADO</h1>
+            <button onclick="location.reload()" class="btn-confirmar" style="color:white; border-color:white;">REINTENTAR</button>
+        </div>
+    </div>
+
+    <script>
+        const AUDIO_FILES = {
+            musicaFondo: "music.mp3",
+            danioRecibido: "damage.mp3",
+            danioCritico: "critical.mp3",
+            derrota: "death.mp3"
+        };
+
+        const AUDIO_VOLUMEN = {
+            musicaFondo: 0.2,
+            danioRecibido: 0.8,
+            danioCritico: 0.8,
+            derrota: 0.65
+        };
+
+        const sndMusica = new Audio(AUDIO_FILES.musicaFondo);
+        sndMusica.loop = true; 
+        sndMusica.volume = AUDIO_VOLUMEN.musicaFondo;
+
+        const sndDanio = new Audio(AUDIO_FILES.danioRecibido);
+        sndDanio.volume = AUDIO_VOLUMEN.danioRecibido;
+
+        const sndCritico = new Audio(AUDIO_FILES.danioCritico);
+        sndCritico.loop = true; 
+        sndCritico.volume = AUDIO_VOLUMEN.danioCritico;
+
+        const sndDerrota = new Audio(AUDIO_FILES.derrota);
+        sndDerrota.volume = AUDIO_VOLUMEN.derrota;
+
+        const TIEMPO_TOTAL_MINUTOS = 10; 
+        const TIEMPO_ESPERA_CLAUSTRO = 60;
+        let vidas = 4;
+
+        const salas = [
+            { id: 0, nombre: "Patio", pistaTexto: "Ella viste de negro, la musica se apaga y no se que mas queda de ella.", clave: "MIRADA", numero: 7, imgFondo: "patio.png", imgPista: "pista_patio.png", completada: false },
+            { id: 1, nombre: "Escalera", pistaTexto: "Schlüssel Schloss Code Schlüssel Zugang Erlaubnis Siegel", clave: "PROHIBIDO", numero: 1, imgFondo: "escalera.png", imgPista: "pista_escalera.png", completada: false },
+            { id: 2, nombre: "Sotano", pistaTexto: "48.8584, 2.2945, 40.6892, -74.0445,\n -22.9519, -43.2105", clave: "MONUMENTO", numero: 4, imgFondo: "sotano.png", imgPista: "pista_sotano.png", completada: false },
+            { id: 3, nombre: "Cripta", pistaTexto: "Sombras susurran cuando la noche despierta, entre pasillos antiguos se esconden verdades, caminos olvidados guardan promesas rotas, raros murmullos recorren los muros de piedra, ecos del pasado intentan advertirte algo, tras cada puerta hay una historia enterrada, observa con cuidado… la respuesta siempre estuvo aquí", clave: "SECRETO", numero: 8, imgFondo: "cripta.png", imgPista: "pista_cripta.png", completada: false },
+            { id: 4, nombre: "Claustro", pistaTexto: "Aqui mueren los que corren, solo ganan los que se quedan, no actues antes que yo o seras condenado", clave: "ZBZDEZGZZ9", numero: 9, imgFondo: "claustro.png", imgPista: "pista_claustro.png", completada: false },
+            { id: 5, nombre: "Camara", pistaTexto: "asnep arap somasu euq ol se euqrop ,soruges somatse ednod ragul le ,odnum ortseun ed ortned oigufer ortseun se y sotneimasnep sortseun neviv ednod", clave: "MENTE", numero: 5, imgFondo: "camara.png", imgPista: "pista_camara.png", completada: false },
+            { id: 6, nombre: "Biblioteca", pistaTexto: "Hay palabras que no deben decirse, nombres que nunca deben pronunciarse... secretos que deben callarse y ruido que no debe escucharse", clave: "", numero: 3, imgFondo: "biblioteca.png", imgPista: "pista_biblioteca.png", completada: false },
+            { id: 7, nombre: "Comedor", pistaTexto: "5 14/12 1/12 21 26/5 24 9 19 20 15/5 14/\n12 1/15 19 3 21 18 9 4 1 4/13 21 5 18 15", clave: "SOMBRA", numero: 6, imgFondo: "comedor.png", imgPista: "pista_comedor.png", completada: false },
+            { id: 8, nombre: "Capilla", pistaTexto: "Donde las verdades se esconden y los mapas se marcan, donde vive el pensamiento y la lengua es extraña, donde el tiempo apremia y hay un luto, donde hay sombras y silencio absoluto.", clave: "84519763", numero: null, imgFondo: "capilla.png", imgPista: "pista_capilla.png", completada: false }
+        ];
+
+        let indexActual = -1;
+        let segundosGlobales = TIEMPO_TOTAL_MINUTOS * 60;
+        let intervaloGlobal = null;
+        let countdownEspera = null;
+        let juegoActivo = true;
+
+        const elDamage = document.getElementById('damage-overlay');
+        const elMonitor = document.getElementById('monitor-vital');
+        const elEstado = document.getElementById('estado-texto');
+        const elPulso = document.getElementById('linea-pulso');
+        const elEscenario = document.getElementById('escenario');
+        const elInput = document.getElementById('input-clave');
+        const elArena = document.getElementById('arena-caida');
+        const elImgPista = document.getElementById('img-pista');
+        const elMapa = document.getElementById('menu-mapa');
+
+        // FUNCIÓN PARA QUITAR LAS INSTRUCCIONES E INICIAR EL JUEGO
+        function comenzarJuego() {
+            document.getElementById('pantalla-instrucciones').style.display = 'none';
+            iniciarTimer();
+            sndMusica.play().catch(e => {});
+        }
+
+        function actualizarVisualesDaño() {
+            document.body.classList.remove('hit-shake');
+            void document.body.offsetWidth; 
+            document.body.classList.add('hit-shake');
+            sndCritico.pause();
+
+            // Lógica de desenfoque progresivo
+            if (vidas === 4) {
+                elDamage.style.opacity = "0";
+                elEstado.innerText = "SALUD OK";
+                elMonitor.style.borderColor = "#00ff00";
+                elEscenario.style.filter = "none";
+                elMapa.style.filter = "none";
+            } else if (vidas === 3) {
+                elDamage.style.opacity = "1"; 
+                elDamage.style.boxShadow = "inset 0 0 75px rgba(255, 0, 0, 0.5)";
+                elEstado.innerText = "HERIDO";
+                elMonitor.style.borderColor = "#ffff00";
+                elPulso.style.background = "#ffff00";
+                elPulso.style.animationDuration = "0.8s";
+                elEscenario.style.filter = "blur(0.6px)";
+                elMapa.style.filter = "blur(0.6px)";
+            } else if (vidas === 2) {
+                elDamage.style.boxShadow = "inset 0 0 180px rgba(200, 0, 0, 0.7)";
+                elEstado.innerText = "GRAVE";
+                elMonitor.style.borderColor = "#ff8000";
+                elPulso.style.background = "#ff8000";
+                elPulso.style.animationDuration = "0.5s";
+                elEscenario.style.filter = "blur(1.2px)";
+                elMapa.style.filter = "blur(1.2px)";
+            } else if (vidas === 1) {
+                elDamage.style.boxShadow = "inset 0 0 270px rgba(150, 0, 0, 0.9)";
+                elEstado.innerText = "ESTADO CRITICO";
+                elMonitor.style.borderColor = "#ff0000";
+                elPulso.style.background = "#ff0000";
+                elPulso.style.animationDuration = "0.2s";
+                elEscenario.style.filter = "blur(1.8px)";
+                elMapa.style.filter = "blur(1.8px)";
+                sndCritico.play().catch(e => {});
+            } else if (vidas <= 0) {
+                finalizarJuego(false, "TE HAS QUEDADO EN EL CAMINO");
+            }
+        }
+
+        function generarMenu() {
+            const grid = document.getElementById('grid-botones');
+            grid.innerHTML = "";
+            salas.forEach((s, idx) => {
+                const btn = document.createElement('button');
+                btn.className = `btn-sala ${s.completada ? 'completada' : ''}`;
+                btn.innerText = s.nombre;
+                btn.onclick = () => { if(!s.completada) entrarASala(idx); };
+                grid.appendChild(btn);
+            });
+        }
+
+        function entrarASala(idx) {
+            indexActual = idx;
+            elMapa.style.display = "none";
+            elEscenario.style.display = "flex";
+            cargarSala(idx);
+            if(sndMusica.paused) sndMusica.play().catch(e=>{});
+        }
+
+        function volverAlMapa() {
+            clearInterval(countdownEspera);
+            elEscenario.style.display = "none";
+            elMapa.style.display = "flex";
+            generarMenu();
+        }
+
+        function cargarSala(idx) {
+            document.getElementById('pantalla-numero').style.display = 'none';
+            const s = salas[idx];
+            document.getElementById('sala-nombre').innerText = s.nombre;
+            document.getElementById('pista-texto').innerText = s.pistaTexto;
+            elEscenario.style.backgroundImage = `url('${s.imgFondo}')`;
+            elInput.value = "";
+            elImgPista.src = s.imgPista || "";
+            elImgPista.style.display = s.imgPista ? "block" : "none";
+            elInput.focus();
+
+            if (s.nombre === "Claustro") {
+                let seg = TIEMPO_ESPERA_CLAUSTRO;
+                countdownEspera = setInterval(() => {
+                    seg--;
+                    if (seg <= 0) {
+                        clearInterval(countdownEspera);
+                        validarRespuesta(true);
+                    }
+                }, 1000);
+            }
+        }
+
+        function validarRespuesta(forzado = false) {
+            const s = salas[indexActual];
+            const valor = elInput.value.toUpperCase().trim();
+
+            if (forzado) {
+                resolverSala(s);
+            } else if (s.nombre === "Claustro") {
+                aplicarCastigo();
+            } else if (valor === s.clave) {
+                resolverSala(s);
+            } else {
+                aplicarCastigo();
+            }
+        }
+
+        function resolverSala(sala) {
+            sala.completada = true;
+            if (sala.numero === null) {
+                finalizarJuego(true);
+            } else {
+                document.getElementById('pantalla-numero').style.display = 'flex';
+                document.getElementById('numero-grande').innerText = sala.numero;
+                setTimeout(() => { volverAlMapa(); }, 2500);
+            }
+        }
+
+        function aplicarCastigo() {
+            vidas--;
+            sndDanio.currentTime = 0;
+            sndDanio.play();
+            actualizarVisualesDaño();
+        }
+
+        function finalizarJuego(victoria, mensaje) {
+            clearInterval(intervaloGlobal);
+            clearInterval(countdownEspera);
+            sndMusica.pause();
+            sndCritico.pause();
+            elEscenario.style.display = "flex";
+            elMapa.style.display = "none";
+            document.getElementById('panel-juego').style.display = 'none';
+            if (victoria) {
+                document.getElementById('victoria-final').style.display = 'flex';
+            } else {
+                sndDerrota.play();
+                document.getElementById('titulo-derrota').innerText = mensaje || "TIEMPO AGOTADO";
+                document.getElementById('derrota-final').style.display = 'flex';
+            }
+        }
+
+        function iniciarTimer() {
+            elArena.style.transition = `transform ${segundosGlobales}s linear`;
+            setTimeout(() => elArena.style.transform = 'scaleY(0)', 100);
+            intervaloGlobal = setInterval(() => {
+                segundosGlobales--;
+                const min = Math.floor(segundosGlobales / 60);
+                const seg = segundosGlobales % 60;
+                document.getElementById('tiempo-texto').innerText = `${min}:${seg.toString().padStart(2,'0')}`;
+                if (segundosGlobales <= 0) finalizarJuego(false);
+            }, 1000);
+        }
+
+        document.getElementById('btn-validar').onclick = () => validarRespuesta();
+        elInput.onkeypress = (e) => { if(e.key === 'Enter') validarRespuesta(); };
+        
+        window.onload = () => { 
+            generarMenu();
+            // El timer ya no inicia al cargar, sino al presionar el botón de instrucciones
+        };
+    </script>
+</body>
+</html>
